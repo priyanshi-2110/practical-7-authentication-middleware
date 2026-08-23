@@ -37,7 +37,7 @@ mongoose
     });
 
 // ========================================
-// Routes Configuration
+// Routes
 // ========================================
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
@@ -57,7 +57,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     console.error(err);
 
-    // Mongoose validation error
     if (err.name === "ValidationError") {
         const errors = {};
 
@@ -71,7 +70,6 @@ app.use((err, req, res, next) => {
         });
     }
 
-    // Invalid MongoDB ObjectId
     if (err.name === "CastError") {
         return res.status(400).json({
             error: "Invalid ID format"
@@ -85,7 +83,7 @@ app.use((err, req, res, next) => {
 });
 
 // ========================================
-// Start server
+// Start Server
 // ========================================
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
