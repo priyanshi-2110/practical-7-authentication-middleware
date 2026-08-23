@@ -3,7 +3,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
-const Task = require("./models/Task");
+const authRoutes = require("./routes/authRoutes");
+const taskRoutes = require("./routes/taskRoutes");
 
 const app = express();
 
@@ -26,7 +27,6 @@ app.use((req, res, next) => {
 // ========================================
 // Connect to MongoDB
 // ========================================
-
 mongoose
     .connect(process.env.MONGO_URI)
     .then(() => {
@@ -37,117 +37,14 @@ mongoose
     });
 
 // ========================================
-// GET - Get all tasks
+// Routes Configuration
 // ========================================
-
-app.get("/tasks", async (req, res, next) => {
-    try {
-        const tasks = await Task.find();
-
-        res.status(200).json(tasks);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// ========================================
-// GET - Get task by ID
-// ========================================
-
-app.get("/tasks/:id", async (req, res, next) => {
-    try {
-        const task = await Task.findById(req.params.id);
-
-        if (!task) {
-            return res.status(404).json({
-                error: "Task not found"
-            });
-        }
-
-        res.status(200).json(task);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// ========================================
-// POST - Create a task
-// ========================================
-
-app.post("/tasks", async (req, res, next) => {
-    try {
-        const newTask = await Task.create({
-            title: req.body.title,
-            description: req.body.description,
-            completed: req.body.completed,
-            priority: req.body.priority
-        });
-
-        res.status(201).json(newTask);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// ========================================
-// PUT - Update a task
-// ========================================
-
-app.put("/tasks/:id", async (req, res, next) => {
-    try {
-        const task = await Task.findByIdAndUpdate(
-            req.params.id,
-            {
-                title: req.body.title,
-                description: req.body.description,
-                completed: req.body.completed,
-                priority: req.body.priority
-            },
-            {
-                new: true,
-                runValidators: true
-            }
-        );
-
-        if (!task) {
-            return res.status(404).json({
-                error: "Task not found"
-            });
-        }
-
-        res.status(200).json(task);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// ========================================
-// DELETE - Delete a task
-// ========================================
-
-app.delete("/tasks/:id", async (req, res, next) => {
-    try {
-        const deletedTask = await Task.findByIdAndDelete(req.params.id);
-
-        if (!deletedTask) {
-            return res.status(404).json({
-                error: "Task not found"
-            });
-        }
-
-        res.status(200).json({
-            message: "Task deleted successfully",
-            task: deletedTask
-        });
-    } catch (err) {
-        next(err);
-    }
-});
+app.use("/api/auth", authRoutes);
+app.use("/api/tasks", taskRoutes);
 
 // ========================================
 // 404 Handler
 // ========================================
-
 app.use((req, res) => {
     res.status(404).json({
         error: "Route not found"
@@ -157,7 +54,6 @@ app.use((req, res) => {
 // ========================================
 // Global Error Handler
 // ========================================
-
 app.use((err, req, res, next) => {
     console.error(err);
 
@@ -178,19 +74,19 @@ app.use((err, req, res, next) => {
     // Invalid MongoDB ObjectId
     if (err.name === "CastError") {
         return res.status(400).json({
-            error: "Invalid task ID"
+            error: "Invalid ID format"
         });
     }
 
     res.status(500).json({
-        error: "Something went wrong"
+        error: "Something went wrong",
+        details: err.message
     });
 });
 
 // ========================================
 // Start server
 // ========================================
-
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
