@@ -1,374 +1,586 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
+import { getTasks, createTask, updateTask, deleteTask } from "../api";
 
-import {
-    getTasks,
-    createTask,
-    updateTask,
-    deleteTask,
-} from "../api";
+function Projects({ user }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-function Projects() {
-    const [tasks, setTasks] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+  // Form state
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
 
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [priority, setPriority] = useState("medium");
+  // Filter & Search state
+  const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'pending' | 'completed'
+  const [searchQuery, setSearchQuery] = useState("");
 
-    const [saving, setSaving] = useState(false);
+  // Load tasks on mount
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const data = await getTasks();
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message || "Failed to load tasks");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // ========================================
-    // GET - Load all tasks
-    // ========================================
+  useEffect(() => {
+    loadTasks();
+  }, []);
 
-    const loadTasks = async () => {
-        try {
-            setLoading(true);
-            setError("");
+  // Create Task (POST /api/tasks)
+  const handleCreate = async (e) => {
+    e.preventDefault();
 
-            const data = await getTasks();
-
-            setTasks(data);
-        } catch (err) {
-            setError(err.message);
-            toast.error("Failed to load tasks");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Load tasks when component starts
-    useEffect(() => {
-        loadTasks();
-    }, []);
-
-    // ========================================
-    // POST - Create a new task
-    // ========================================
-
-    const handleCreate = async (e) => {
-        e.preventDefault();
-
-        // Validate title
-        if (!title.trim()) {
-            setError("Task title is required");
-            toast.error("Task title is required");
-            return;
-        }
-
-        try {
-            setSaving(true);
-            setError("");
-
-            const newTask = await createTask({
-                title: title,
-                description: description,
-                priority: priority,
-                completed: false,
-            });
-
-            // Update React state
-            setTasks((prev) => [...prev, newTask]);
-
-            // Success message
-            toast.success("Task created successfully!");
-
-            // Clear form
-            setTitle("");
-            setDescription("");
-            setPriority("medium");
-
-        } catch (err) {
-            setError(err.message);
-            toast.error("Failed to create task");
-
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    // ========================================
-    // PUT - Update task
-    // ========================================
-
-    const handleUpdate = async (task) => {
-        try {
-            setError("");
-
-            const updatedTask = await updateTask(task._id, {
-                title: task.title,
-                description: task.description,
-                priority: task.priority,
-                completed: !task.completed,
-            });
-
-            // Update task in React state
-            setTasks((prev) =>
-                prev.map((item) =>
-                    item._id === updatedTask._id
-                        ? updatedTask
-                        : item
-                )
-            );
-
-            toast.success("Task updated successfully!");
-
-        } catch (err) {
-            setError(err.message);
-            toast.error("Failed to update task");
-        }
-    };
-
-    // ========================================
-    // DELETE - Delete task
-    // ========================================
-
-    const handleDelete = async (id) => {
-
-        // Confirmation dialog
-        const confirmed = window.confirm(
-            "Are you sure you want to delete this task?"
-        );
-
-        // If user clicks Cancel
-        if (!confirmed) {
-            return;
-        }
-
-        try {
-            setError("");
-
-            // Delete from backend
-            await deleteTask(id);
-
-            // Remove from React state
-            setTasks((prev) =>
-                prev.filter((task) => task._id !== id)
-            );
-
-            toast.success("Task deleted successfully!");
-
-        } catch (err) {
-            setError(err.message);
-            toast.error("Failed to delete task");
-        }
-    };
-
-    // ========================================
-    // Loading state
-    // ========================================
-
-    if (loading) {
-        return (
-            <div style={{ padding: "30px" }}>
-                <h2>Task Manager</h2>
-                <p>Loading tasks...</p>
-            </div>
-        );
+    if (!title.trim()) {
+      setError("Task title is required");
+      toast.error("Task title is required");
+      return;
     }
 
-    // ========================================
-    // UI
-    // ========================================
+    try {
+      setSaving(true);
+      setError("");
 
-    return (
-        <div
+      const newTask = await createTask({
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        completed: false,
+      });
+
+      setTasks((prev) => [newTask, ...prev]);
+      toast.success("Task created and saved to MongoDB!");
+
+      // Reset form
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message || "Failed to create task");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Toggle Completion (PUT /api/tasks/:id)
+  const handleToggleComplete = async (task) => {
+    try {
+      const updated = await updateTask(task._id, {
+        completed: !task.completed,
+      });
+
+      setTasks((prev) =>
+        prev.map((item) => (item._id === updated._id ? updated : item))
+      );
+
+      if (updated.completed) {
+        toast.success("Task marked complete!", { icon: "🎉" });
+      } else {
+        toast("Task marked pending", { icon: "⏳" });
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to update task");
+    }
+  };
+
+  // Delete Task (DELETE /api/tasks/:id)
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this task?")) {
+      return;
+    }
+
+    try {
+      await deleteTask(id);
+      setTasks((prev) => prev.filter((t) => t._id !== id));
+      toast.success("Task deleted successfully");
+    } catch (err) {
+      toast.error(err.message || "Failed to delete task");
+    }
+  };
+
+  // Filtered & Searched Tasks
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      // Status filter
+      if (filterStatus === "pending" && task.completed) return false;
+      if (filterStatus === "completed" && !task.completed) return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = task.title?.toLowerCase().includes(q);
+        const matchesDesc = task.description?.toLowerCase().includes(q);
+        return matchesTitle || matchesDesc;
+      }
+
+      return true;
+    });
+  }, [tasks, filterStatus, searchQuery]);
+
+  // Task stats
+  const totalCount = tasks.length;
+  const completedCount = tasks.filter((t) => t.completed).length;
+  const pendingCount = totalCount - completedCount;
+
+  return (
+    <main
+      style={{
+        maxWidth: "1100px",
+        margin: "0 auto",
+        padding: "2rem 1.5rem 4rem",
+        width: "100%",
+      }}
+    >
+      {/* Top Banner / Welcome */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          marginBottom: "2rem",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1
             style={{
-                padding: "30px",
-                maxWidth: "900px",
-                margin: "auto",
+              fontSize: "2.2rem",
+              fontWeight: 800,
+              background: "linear-gradient(135deg, #fff, #94a3b8)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              marginBottom: "0.25rem",
             }}
+          >
+            Task Pipeline Dashboard
+          </h1>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.95rem" }}>
+            Secured with JSON Web Token middleware and server-side request validation.
+          </p>
+        </div>
+
+        {/* Stats Row */}
+        <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div
+            className="glass-card"
+            style={{
+              padding: "0.6rem 1.1rem",
+              borderRadius: "var(--radius-sm)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+              Total
+            </div>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--text-main)" }}>
+              {totalCount}
+            </div>
+          </div>
+          <div
+            className="glass-card"
+            style={{
+              padding: "0.6rem 1.1rem",
+              borderRadius: "var(--radius-sm)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", color: "var(--accent-amber)", textTransform: "uppercase", fontWeight: 700 }}>
+              Pending
+            </div>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--accent-amber)" }}>
+              {pendingCount}
+            </div>
+          </div>
+          <div
+            className="glass-card"
+            style={{
+              padding: "0.6rem 1.1rem",
+              borderRadius: "var(--radius-sm)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", color: "var(--accent-emerald)", textTransform: "uppercase", fontWeight: 700 }}>
+              Done
+            </div>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--accent-emerald)" }}>
+              {completedCount}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "360px 1fr",
+          gap: "2rem",
+          alignItems: "start",
+        }}
+      >
+        {/* ========================================================
+            LEFT COLUMN: CREATE TASK FORM
+        ======================================================== */}
+        <section
+          className="glass-card"
+          style={{
+            padding: "1.75rem",
+            position: "sticky",
+            top: "85px",
+          }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+            <span style={{ fontSize: "1.2rem" }}>✍️</span>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Create New Task</h2>
+          </div>
 
-            <h1>Task Manager</h1>
+          {error && (
+            <div
+              style={{
+                padding: "0.65rem 0.85rem",
+                borderRadius: "var(--radius-sm)",
+                background: "rgba(244, 63, 94, 0.12)",
+                border: "1px solid rgba(244, 63, 94, 0.3)",
+                color: "#fb7185",
+                fontSize: "0.825rem",
+                marginBottom: "1rem",
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
 
-            {/* Error message */}
-
-            {error && (
-                <p
-                    style={{
-                        color: "red",
-                        fontWeight: "bold",
-                    }}
-                >
-                    {error}
-                </p>
-            )}
-
-            {/* ========================================
-                CREATE TASK FORM
-            ======================================== */}
-
-            <form onSubmit={handleCreate}>
-
-                <div style={{ marginBottom: "10px" }}>
-
-                    <input
-                        type="text"
-                        placeholder="Task title"
-                        value={title}
-                        onChange={(e) =>
-                            setTitle(e.target.value)
-                        }
-                        style={{
-                            padding: "8px",
-                            width: "250px",
-                        }}
-                    />
-
-                </div>
-
-                <div style={{ marginBottom: "10px" }}>
-
-                    <input
-                        type="text"
-                        placeholder="Description"
-                        value={description}
-                        onChange={(e) =>
-                            setDescription(e.target.value)
-                        }
-                        style={{
-                            padding: "8px",
-                            width: "250px",
-                        }}
-                    />
-
-                </div>
-
-                <div style={{ marginBottom: "10px" }}>
-
-                    <select
-                        value={priority}
-                        onChange={(e) =>
-                            setPriority(e.target.value)
-                        }
-                        style={{
-                            padding: "8px",
-                        }}
-                    >
-                        <option value="low">
-                            Low
-                        </option>
-
-                        <option value="medium">
-                            Medium
-                        </option>
-
-                        <option value="high">
-                            High
-                        </option>
-                    </select>
-
-                </div>
-
-                <button
-                    type="submit"
-                    disabled={saving}
-                    style={{
-                        padding: "8px 15px",
-                        cursor: saving
-                            ? "not-allowed"
-                            : "pointer",
-                    }}
-                >
-                    {saving
-                        ? "Adding..."
-                        : "Add Task"}
-                </button>
-
-            </form>
-
-            <hr
+          <form onSubmit={handleCreate} style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+            <div>
+              <label
                 style={{
-                    margin: "30px 0",
+                  display: "block",
+                  fontSize: "0.825rem",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  marginBottom: "0.4rem",
                 }}
-            />
+              >
+                Task Title <span style={{ color: "var(--accent-rose)" }}>*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Implement refresh tokens"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.25rem", display: "block" }}>
+                Validated on server via <code>validateTask</code> middleware.
+              </span>
+            </div>
 
-            {/* ========================================
-                DISPLAY TASKS
-            ======================================== */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.825rem",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  marginBottom: "0.4rem",
+                }}
+              >
+                Description
+              </label>
+              <textarea
+                placeholder="Optional details, notes, or subtasks..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                style={{ resize: "vertical" }}
+              />
+            </div>
 
-            <h2>Tasks</h2>
-
-            {tasks.length === 0 ? (
-
-                <p>No tasks found.</p>
-
-            ) : (
-
-                tasks.map((task) => (
-
-                    <div
-                        key={task._id}
-                        style={{
-                            border: "1px solid #ccc",
-                            padding: "15px",
-                            marginBottom: "15px",
-                            borderRadius: "5px",
-                        }}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.825rem",
+                  fontWeight: 600,
+                  color: "var(--text-muted)",
+                  marginBottom: "0.4rem",
+                }}
+              >
+                Priority Level
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                {[
+                  { id: "low", label: "Low", color: "#34d399" },
+                  { id: "medium", label: "Medium", color: "#fbbf24" },
+                  { id: "high", label: "High", color: "#fb7185" },
+                ].map((p) => {
+                  const isSelected = priority === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPriority(p.id)}
+                      style={{
+                        padding: "0.5rem",
+                        borderRadius: "var(--radius-sm)",
+                        border: isSelected ? `2px solid ${p.color}` : "1px solid var(--border-subtle)",
+                        background: isSelected ? "var(--bg-input-hover)" : "var(--bg-input)",
+                        color: isSelected ? p.color : "var(--text-muted)",
+                        fontWeight: isSelected ? 700 : 500,
+                        fontSize: "0.825rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
                     >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                        <h3>
-                            {task.title}
-                        </h3>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving}
+              style={{
+                marginTop: "0.5rem",
+                padding: "0.75rem",
+              }}
+            >
+              {saving ? "Saving to MongoDB..." : "+ Add Task"}
+            </button>
+          </form>
+        </section>
 
-                        <p>
-                            <strong>
-                                Description:
-                            </strong>{" "}
-                            {task.description}
-                        </p>
+        {/* ========================================================
+            RIGHT COLUMN: TASK LIST & FILTERS
+        ======================================================== */}
+        <section>
+          {/* Filter & Search Bar */}
+          <div
+            className="glass-card"
+            style={{
+              padding: "1rem 1.25rem",
+              marginBottom: "1.5rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            {/* Status Tabs */}
+            <div
+              style={{
+                display: "inline-flex",
+                background: "var(--bg-primary)",
+                padding: "3px",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              {[
+                { id: "all", label: `All (${totalCount})` },
+                { id: "pending", label: `Pending (${pendingCount})` },
+                { id: "completed", label: `Done (${completedCount})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilterStatus(tab.id)}
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    border: "none",
+                    borderRadius: "6px",
+                    background: filterStatus === tab.id ? "var(--primary)" : "transparent",
+                    color: filterStatus === tab.id ? "#fff" : "var(--text-muted)",
+                    fontWeight: 600,
+                    fontSize: "0.825rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-                        <p>
-                            <strong>
-                                Priority:
-                            </strong>{" "}
-                            {task.priority}
-                        </p>
+            {/* Search Input */}
+            <div style={{ minWidth: "220px", flex: "1 1 auto" }}>
+              <input
+                type="text"
+                placeholder="🔍 Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem" }}
+              />
+            </div>
+          </div>
 
-                        <p>
-                            <strong>
-                                Status:
-                            </strong>{" "}
-                            {task.completed
-                                ? "Completed"
-                                : "Pending"}
-                        </p>
+          {/* Task Items */}
+          {loading ? (
+            <div
+              className="glass-card"
+              style={{
+                padding: "3.5rem",
+                textAlign: "center",
+                color: "var(--text-muted)",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>⏳</div>
+              <p style={{ fontWeight: 600 }}>Loading protected tasks from backend...</p>
+            </div>
+          ) : filteredTasks.length === 0 ? (
+            <div
+              className="glass-card"
+              style={{
+                padding: "3.5rem 2rem",
+                textAlign: "center",
+                color: "var(--text-dim)",
+              }}
+            >
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>📋</div>
+              <h3 style={{ color: "var(--text-main)", marginBottom: "0.4rem" }}>
+                {searchQuery ? "No matching tasks found" : "No tasks in this view"}
+              </h3>
+              <p style={{ fontSize: "0.9rem", maxWidth: "340px", margin: "0 auto" }}>
+                {searchQuery
+                  ? "Try adjusting your search terms or clearing the filter."
+                  : "Use the form on the left to add your first authenticated task!"}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              {filteredTasks.map((task) => {
+                const priorityClass =
+                  task.priority === "high"
+                    ? "badge-high"
+                    : task.priority === "low"
+                    ? "badge-low"
+                    : "badge-medium";
 
-                        {/* UPDATE BUTTON */}
+                return (
+                  <div
+                    key={task._id}
+                    className="glass-card animate-fade-in"
+                    style={{
+                      padding: "1.25rem 1.5rem",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      transition: "all var(--transition-fast)",
+                      borderLeft: task.completed
+                        ? "4px solid #10b981"
+                        : "4px solid var(--primary)",
+                    }}
+                  >
+                    {/* Checkbox & Details */}
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", flex: 1 }}>
+                      {/* Completion Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleComplete(task)}
+                        title={task.completed ? "Mark as pending" : "Mark as completed"}
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          border: task.completed
+                            ? "2px solid #10b981"
+                            : "2px solid var(--text-dim)",
+                          background: task.completed ? "#10b981" : "transparent",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          fontSize: "0.8rem",
+                          flexShrink: 0,
+                          marginTop: "2px",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {task.completed && "✓"}
+                      </button>
 
-                        <button
-                            onClick={() =>
-                                handleUpdate(task)
-                            }
-                        >
-                            {task.completed
-                                ? "Mark Pending"
-                                : "Mark Completed"}
-                        </button>
-
-                        {/* DELETE BUTTON */}
-
-                        <button
-                            onClick={() =>
-                                handleDelete(task._id)
-                            }
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", marginBottom: "0.35rem" }}>
+                          <h3
                             style={{
-                                marginLeft: "10px",
+                              fontSize: "1.05rem",
+                              fontWeight: 700,
+                              textDecoration: task.completed ? "line-through" : "none",
+                              color: task.completed ? "var(--text-dim)" : "var(--text-main)",
                             }}
-                        >
-                            Delete
-                        </button>
+                          >
+                            {task.title}
+                          </h3>
 
+                          <span className={`badge ${priorityClass}`}>
+                            {task.priority || "medium"}
+                          </span>
+
+                          {task.completed && (
+                            <span className="badge badge-pill-status">
+                              Completed
+                            </span>
+                          )}
+                        </div>
+
+                        {task.description && (
+                          <p
+                            style={{
+                              fontSize: "0.885rem",
+                              color: task.completed ? "var(--text-dim)" : "var(--text-muted)",
+                              lineHeight: 1.45,
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            {task.description}
+                          </p>
+                        )}
+
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                          Created: {task.createdAt ? new Date(task.createdAt).toLocaleString() : "Just now"}
+                        </div>
+                      </div>
                     </div>
 
-                ))
-            )}
-
-        </div>
-    );
+                    {/* Actions */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <button
+                        onClick={() => handleDelete(task._id)}
+                        className="btn btn-danger"
+                        style={{
+                          padding: "0.4rem 0.75rem",
+                          fontSize: "0.8rem",
+                          borderRadius: "var(--radius-sm)",
+                        }}
+                        title="Delete task"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }
 
 export default Projects;
