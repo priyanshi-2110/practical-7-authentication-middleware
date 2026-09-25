@@ -7,14 +7,16 @@ const authMiddleware = (req, res, next) => {
     // Check Authorization header
     if (!authHeader) {
       return res.status(401).json({
-        message: "Authorization header missing"
+        message: "Authorization header missing",
+        error: "Unauthorized"
       });
     }
 
     // Check Bearer format
     if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        message: "Authorization format must be Bearer <token>"
+        message: "Authorization format must be Bearer <token>",
+        error: "Unauthorized"
       });
     }
 
@@ -23,14 +25,15 @@ const authMiddleware = (req, res, next) => {
 
     if (!token) {
       return res.status(401).json({
-        message: "Token missing"
+        message: "Token missing",
+        error: "Unauthorized"
       });
     }
 
     // Verify token
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET || "supersecretjwtsecretkey_practical7_2026"
     );
 
     // Store decoded user information
@@ -43,7 +46,8 @@ const authMiddleware = (req, res, next) => {
     console.error("Authentication error:", error.message);
 
     return res.status(401).json({
-      message: "Invalid or expired token"
+      message: "Invalid or expired token",
+      error: "Unauthorized"
     });
   }
 };

@@ -1,9 +1,10 @@
 const validateTask = (req, res, next) => {
-  const { title } = req.body;
+  const { title } = req.body || {};
 
-  if (!title || title.trim() === "") {
+  if (!title || typeof title !== "string" || title.trim() === "") {
     return res.status(400).json({
-      message: "Title is required"
+      message: "Title is required",
+      error: "Validation failed"
     });
   }
 

@@ -6,17 +6,21 @@ const validateTask = require("../middleware/validationMiddleware");
 
 const Task = require("../models/Task");
 
-// GET tasks - Get all tasks
+// ========================================
+// GET tasks - Get all tasks (Protected)
+// ========================================
 router.get("/", authMiddleware, async (req, res, next) => {
   try {
-    const tasks = await Task.find();
-    res.json(tasks);
+    const tasks = await Task.find().sort({ createdAt: -1 });
+    res.status(200).json(tasks);
   } catch (error) {
     next(error);
   }
 });
 
-// GET task by ID
+// ========================================
+// GET task by ID (Protected)
+// ========================================
 router.get("/:id", authMiddleware, async (req, res, next) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -27,41 +31,48 @@ router.get("/:id", authMiddleware, async (req, res, next) => {
       });
     }
 
-    res.json(task);
+    res.status(200).json(task);
   } catch (error) {
     next(error);
   }
 });
 
-// CREATE task
+// ========================================
+// CREATE task (Protected + Input Validated)
+// ========================================
 router.post("/", authMiddleware, validateTask, async (req, res, next) => {
   try {
-    const task = await Task.create({
-      title: req.body.title,
-      description: req.body.description,
-      completed: req.body.completed,
-      priority: req.body.priority
+    const { title, description, completed, priority } = req.body || {};
+
+    const newTask = await Task.create({
+      title: title.trim(),
+      description: description || "",
+      completed: completed === true,
+      priority: priority || "medium"
     });
 
-    res.status(201).json(task);
+    res.status(201).json(newTask);
   } catch (error) {
     next(error);
   }
 });
 
-// UPDATE task
+// ========================================
+// UPDATE task (Protected)
+// ========================================
 router.put("/:id", authMiddleware, async (req, res, next) => {
   try {
+    const updateData = {};
+    if (req.body.title !== undefined) updateData.title = req.body.title;
+    if (req.body.description !== undefined) updateData.description = req.body.description;
+    if (req.body.completed !== undefined) updateData.completed = req.body.completed;
+    if (req.body.priority !== undefined) updateData.priority = req.body.priority;
+
     const task = await Task.findByIdAndUpdate(
       req.params.id,
+      updateData,
       {
-        title: req.body.title,
-        description: req.body.description,
-        completed: req.body.completed,
-        priority: req.body.priority
-      },
-      { 
-        new: true,
+        returnDocument: "after",
         runValidators: true
       }
     );
@@ -72,13 +83,15 @@ router.put("/:id", authMiddleware, async (req, res, next) => {
       });
     }
 
-    res.json(task);
+    res.status(200).json(task);
   } catch (error) {
     next(error);
   }
 });
 
-// DELETE task
+// ========================================
+// DELETE task (Protected)
+// ========================================
 router.delete("/:id", authMiddleware, async (req, res, next) => {
   try {
     const task = await Task.findByIdAndDelete(req.params.id);
@@ -89,7 +102,7 @@ router.delete("/:id", authMiddleware, async (req, res, next) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       message: "Task deleted successfully",
       task
     });

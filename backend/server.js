@@ -28,7 +28,7 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 // ========================================
 mongoose
-    .connect(process.env.MONGO_URI)
+    .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/taskmanager")
     .then(() => {
         console.log("MongoDB connected successfully");
     })
@@ -37,10 +37,20 @@ mongoose
     });
 
 // ========================================
-// Routes
+// Health / Root Route
+// ========================================
+app.get("/api/health", (req, res) => {
+    res.status(200).json({ status: "ok", message: "Server is healthy" });
+});
+
+// ========================================
+// Mount Routes
 // ========================================
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes);
+
 app.use("/api/tasks", taskRoutes);
+app.use("/tasks", taskRoutes);
 
 // ========================================
 // 404 Handler
@@ -55,11 +65,11 @@ app.use((req, res) => {
 // Global Error Handler
 // ========================================
 app.use((err, req, res, next) => {
-    console.error(err);
+    console.error("Server Error:", err);
 
+    // Mongoose validation error
     if (err.name === "ValidationError") {
         const errors = {};
-
         for (const field in err.errors) {
             errors[field] = err.errors[field].message;
         }
@@ -70,9 +80,18 @@ app.use((err, req, res, next) => {
         });
     }
 
+    // Invalid MongoDB ObjectId
     if (err.name === "CastError") {
         return res.status(400).json({
-            error: "Invalid ID format"
+            error: "Invalid task ID"
+        });
+    }
+
+    // JWT errors
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+        return res.status(401).json({
+            error: "Unauthorized",
+            message: err.message
         });
     }
 
@@ -83,7 +102,7 @@ app.use((err, req, res, next) => {
 });
 
 // ========================================
-// Start Server
+// Start server
 // ========================================
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

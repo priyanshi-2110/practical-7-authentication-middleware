@@ -21,8 +21,14 @@ router.post("/register", async (req, res) => {
       });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters long"
+      });
+    }
+
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (existingUser) {
       return res.status(409).json({
@@ -30,17 +36,30 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // Hash password
+    // Hash password using bcrypt
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
     const user = await User.create({
-      email,
+      email: email.toLowerCase().trim(),
       password: hashedPassword
     });
 
+    // Generate JWT token (1 hour expiry)
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email
+      },
+      process.env.JWT_SECRET || "supersecretjwtsecretkey_practical7_2026",
+      {
+        expiresIn: "1h"
+      }
+    );
+
     res.status(201).json({
       message: "User registered successfully",
+      token: token,
       user: {
         id: user._id,
         email: user.email
@@ -72,8 +91,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Find user
-    const user = await User.findOne({ email });
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
     if (!user) {
       return res.status(401).json({
@@ -93,12 +112,13 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Generate JWT
+    // Generate JWT (1 hour expiry)
     const token = jwt.sign(
       {
-        id: user._id
+        id: user._id,
+        email: user.email
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || "supersecretjwtsecretkey_practical7_2026",
       {
         expiresIn: "1h"
       }
@@ -106,7 +126,11 @@ router.post("/login", async (req, res) => {
 
     res.status(200).json({
       message: "Login successful",
-      token: token
+      token: token,
+      user: {
+        id: user._id,
+        email: user.email
+      }
     });
 
   } catch (error) {
@@ -125,8 +149,8 @@ router.post("/login", async (req, res) => {
 // ========================================
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
-      .select("-password");
+    const userId = req.user.id || req.user._id;
+    const user = await User.findById(userId).select("-password");
 
     if (!user) {
       return res.status(404).json({
@@ -134,20 +158,22 @@ router.get("/me", authMiddleware, async (req, res) => {
       });
     }
 
-    res.status(200).json(user);
+    res.status(200).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
 
   } catch (error) {
     console.error("ME endpoint error:", error);
 
     res.status(500).json({
-      message: "Failed to get user",
+      message: "Failed to get user profile",
       error: error.message
     });
   }
 });
 
-
-// ========================================
-// Export Router
-// ========================================
 module.exports = router;
